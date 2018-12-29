@@ -1,0 +1,58 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: wiki
+objects:
+#################################
+# PersistentVolumeClaim
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: es-config
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 10Mi
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: es-data
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 2Gi
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: es-plugin
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 1Gi
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: mongo-config
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 10Mi
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: mongo-db
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 2Gi
+

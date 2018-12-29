@@ -1,0 +1,413 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: wiki
+objects:
+#############################
+# ImageStream
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    name: elasticsearch
+  spec:
+    lookupPolicy:
+      local: false
+    tags:
+    - from:
+        kind: DockerImage
+        name: elasticsearch:5.3-alpine
+      importPolicy: {}
+      name: 5.3-alpine
+      referencePolicy:
+        type: ""
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    labels:
+      build: app
+    name: growi
+  spec:
+    lookupPolicy:
+      local: false
+    tags:
+    - from:
+        kind: DockerImage
+        name: 'weseek/growi:3'
+      name: "3"
+      referencePolicy:
+        type: Source
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    labels:
+      build: app
+    name: app
+  spec:
+    lookupPolicy:
+      local: false
+    tags:
+    - from:
+        kind: DockerImage
+        name: app:latest
+      importPolicy: {}
+      name: latest
+      referencePolicy:
+        type: ""
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    name: mongo
+  spec:
+    lookupPolicy:
+      local: false
+    tags:
+    - from:
+        kind: DockerImage
+        name: mongo:3.4
+      importPolicy: {}
+      name: "3.4"
+      referencePolicy:
+        type: ""
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    labels:
+      app: elasticsearch
+    name: elasticsearch
+  spec:
+    replicas: 1
+    selector:
+      app: elasticsearch
+      deploymentconfig: elasticsearch
+    strategy:
+      type: Recreate
+    template:
+      metadata:
+        annotations:
+          openshift.io/generated-by: OpenShiftWebConsole
+        labels:
+          app: elasticsearch
+          deploymentconfig: elasticsearch
+      spec:
+        containers:
+        - command:
+          - sh
+          - -c
+          - ./bin/elasticsearch-plugin list | grep -q analysis-kuromoji || ./bin/elasticsearch-plugin
+            install analysis-kuromoji; ./bin/elasticsearch-plugin list | grep -q analysis-icu
+            || ./bin/elasticsearch-plugin install analysis-icu; /docker-entrypoint.sh
+            elasticsearch
+          env:
+          - name: ES_JAVA_OPTS
+            value: -Xms256m -Xmx256m
+          image: elasticsearch:latest
+          imagePullPolicy: Always
+          name: elasticsearch
+          ports:
+          - containerPort: 9200
+            protocol: TCP
+          - containerPort: 9300
+            protocol: TCP
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /usr/share/elasticsearch/data
+            name: volume-qi0tf
+          - mountPath: /usr/share/elasticsearch/plugins
+            name: volume-h9etc
+          - mountPath: /usr/share/elasticsearch/config
+            name: volume-es-config
+          - mountPath: /usr/share/elasticsearch/config/scripts
+            name: volume-es-config-scripts
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+        volumes:
+        - name: volume-qi0tf
+          persistentVolumeClaim:
+            claimName: es-data
+        - name: volume-h9etc
+          persistentVolumeClaim:
+            claimName: es-plugin
+        - name: volume-es-config
+          configMap:
+            name: es-config
+        - name: volume-es-config-scripts
+          configMap:
+            name: es-config-scripts
+    test: false
+    triggers:
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - elasticsearch
+        from:
+          kind: ImageStreamTag
+          name: elasticsearch:5.3-alpine
+      type: ImageChange
+    - type: ConfigChange
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    labels:
+      app: app
+    name: app
+  spec:
+    replicas: 2
+    selector:
+      app: app
+      deploymentconfig: app
+    strategy:
+      activeDeadlineSeconds: 21600
+      resources: {}
+      rollingParams:
+        intervalSeconds: 1
+        maxSurge: 25%
+        maxUnavailable: 25%
+        timeoutSeconds: 600
+        updatePeriodSeconds: 1
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          app: app
+          deploymentconfig: app
+      spec:
+        containers:
+        - command:
+          - dockerize
+          - -wait
+          - tcp://mongo:27017
+          - -wait
+          - tcp://elasticsearch:9200
+          - -timeout
+          - 60s
+          - npm
+          - run
+          - server:prod
+          env:
+          - name: MONGO_URI
+            value: mongodb://mongo.growi.svc:27017/growi
+          - name: ELASTICSEARCH_URI
+            value: http://elasticsearch.growi.svc:9200/growi
+          - name: PASSWORD_SEED
+            value: changeme
+          image: app:latest
+          imagePullPolicy: Always
+          name: app
+          ports:
+          - containerPort: 3000
+            protocol: TCP
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /data
+            name: app-1
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+        volumes:
+        - emptyDir: {}
+          name: app-1
+    test: false
+    triggers:
+    - type: ConfigChange
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - app
+        from:
+          kind: ImageStreamTag
+          name: app:latest
+      type: ImageChange
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    labels:
+      app: mongo
+    name: mongo
+  spec:
+    replicas: 1
+    selector:
+      app: mongo
+      deploymentconfig: mongo
+    strategy:
+      activeDeadlineSeconds: 21600
+      resources: {}
+      rollingParams:
+        intervalSeconds: 1
+        maxSurge: 25%
+        maxUnavailable: 25%
+        timeoutSeconds: 600
+        updatePeriodSeconds: 1
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          app: mongo
+          deploymentconfig: mongo
+      spec:
+        containers:
+        - image: mongo:latest
+          imagePullPolicy: Always
+          name: mongo
+          ports:
+          - containerPort: 27017
+            protocol: TCP
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /data/configdb
+            name: volume-482iw
+          - mountPath: /data/db
+            name: volume-ia7am
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+        volumes:
+        - name: volume-482iw
+          persistentVolumeClaim:
+            claimName: mongo-config
+        - name: volume-ia7am
+          persistentVolumeClaim:
+            claimName: mongo-db
+    test: false
+    triggers:
+    - type: ConfigChange
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - mongo
+        from:
+          kind: ImageStreamTag
+          name: mongo:3.4
+      type: ImageChange
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    annotations:
+      openshift.io/generated-by: OpenShiftNewBuild
+    labels:
+      build: app
+    name: app
+  spec:
+    failedBuildsHistoryLimit: 5
+    nodeSelector: null
+    output:
+      to:
+        kind: ImageStreamTag
+        name: app:latest
+    postCommit: {}
+    resources: {}
+    runPolicy: Serial
+    strategy:
+      type: Docker
+      dockerStrategy:
+        from:
+          kind: ImageStreamTag
+          name: growi:3
+    source:
+      type: Dockerfile
+      dockerfile: |
+        FROM weseek/growi:3
+        ENV APP_DIR /opt/growi
+
+        # install dockerize
+        ENV DOCKERIZE_VERSION v0.6.1
+        RUN apk add --no-cache --virtual .dl-deps curl \
+            && curl -SL https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
+                | tar -xz -C /usr/local/bin \
+            && apk del .dl-deps
+
+        WORKDIR ${APP_DIR}
+
+    successfulBuildsHistoryLimit: 5
+    triggers:
+    - github:
+        secret: vGVCxqUX7utlu4wW3n6f
+      type: GitHub
+    - generic:
+        secret: n2UTuSL7x7v9I2KsNLpM
+      type: Generic
+    - type: ConfigChange
+    - imageChange: {}
+      type: ImageChange
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: elasticsearch
+    name: elasticsearch
+  spec:
+    ports:
+    - name: 9200-tcp
+      port: 9200
+      protocol: TCP
+      targetPort: 9200
+    - name: 9300-tcp
+      port: 9300
+      protocol: TCP
+      targetPort: 9300
+    selector:
+      deploymentconfig: elasticsearch
+    sessionAffinity: None
+    type: ClusterIP
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: app
+    name: app
+  spec:
+    ports:
+    - name: 3000-tcp
+      port: 3000
+      protocol: TCP
+      targetPort: 3000
+    selector:
+      deploymentconfig: app
+    sessionAffinity: None
+    type: ClusterIP
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: mongo
+    name: mongo
+  spec:
+    ports:
+    - name: 27017-tcp
+      port: 27017
+      protocol: TCP
+      targetPort: 27017
+    selector:
+      deploymentconfig: mongo
+    sessionAffinity: None
+    type: ClusterIP
+- apiVersion: v1
+  kind: Route
+  metadata:
+    annotations:
+      openshift.io/host.generated: "true"
+    labels:
+      app: app
+    name: app
+  spec:
+    port:
+      targetPort: 3000-tcp
+    tls:
+      termination: edge
+    to:
+      kind: Service
+      name: app
+      weight: 100
+    wildcardPolicy: None
