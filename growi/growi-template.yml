@@ -116,9 +116,9 @@ objects:
           env:
           - name: ES_JAVA_OPTS
             value: -Xms256m -Xmx256m
-          image: elasticsearch:latest
+          image: es:latest
           imagePullPolicy: Always
-          name: elasticsearch
+          name: es
           ports:
           - containerPort: 9200
             protocol: TCP
@@ -346,8 +346,6 @@ objects:
 - apiVersion: v1
   kind: BuildConfig
   metadata:
-    annotations:
-      openshift.io/generated-by: OpenShiftNewBuild
     labels:
       build: app
     name: app
@@ -452,7 +450,7 @@ objects:
       openshift.io/host.generated: "true"
     labels:
       app: app
-    name: app
+    name: ${NAME}
   spec:
     port:
       targetPort: 3000-tcp
