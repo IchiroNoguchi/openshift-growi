@@ -1,12 +1,18 @@
+# Run on OpenShift
 1. create PersistentVolume
   ```
   $ bash  create-pv.sh 
   ```
 2. create config map
   ```
+  $ # git clone https://github.com/weseek/growi-docker-compose.git 
+  $ # cp  growi-docker-compose/esconfig .
   $ bash create-cm.sh
   ```
-
+3. create any objects [is, bc, dc, svc, route]
+  ```
+  $ oc process  -f growi-template.yml  -p NAME=YOUR_WIKI_NAME_HERE  | oc create -f - 
+  ```
 
 ## Memo
 ```
