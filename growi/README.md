@@ -13,7 +13,10 @@
   ```
   $ oc process  -f growi-template.yml  -p NAME=YOUR_WIKI_NAME_HERE  | oc create -f - 
   ```
-
+## Cleanup
+```
+ oc delete bc,dc,svc,route -l system=YOUR_WIKI_NAME_HERE
+ ```
 ## Memo
 ```
  docker pull elasticsearch:5.3-alpine 
